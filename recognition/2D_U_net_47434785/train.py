@@ -21,9 +21,9 @@ from modules import UNet2D
 
 
 # Settings: use the Windows path locally or the Linux path on Rangpur.
-DATA_ROOT = "/home/groups/comp3710/HipMRI_Study_open"
+DATA_ROOT = "/home/groups/comp3710/HipMRI_Study_open/keras_slices_data"
 BATCH_SIZE = 8
-EPOCHS = 20
+EPOCHS = 50
 LEARNING_RATE = 1e-4
 BASE_CHANNELS = 64
 NUM_CLASSES = 6
