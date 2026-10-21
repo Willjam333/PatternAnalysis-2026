@@ -29,8 +29,8 @@ BASE_CHANNELS = 64
 NUM_CLASSES = 6
 PROSTATE_CLASS = 5  # Confirm label 5 using official HipMRI label metadata.
 SAVE_DIR = Path("runs/baseline")
-MAX_BATCHES = None      # Set to 2 for a quick functionality test.
-TEST_AFTER_TRAINING = True   # Set False while developing; True for final evaluation.
+MAX_BATCHES = None      
+TEST_AFTER_TRAINING = False   # Set False while developing; True for final evaluation.
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
