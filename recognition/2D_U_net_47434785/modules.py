@@ -132,3 +132,134 @@ class UNet2D(nn.Module):
         x = self.up3(x, s1)
         x = self.up4(x, s0)
         return self.output_conv(x)
+
+
+"""Improved U-NET Architecture (adapted from Isensee et al., 2018)
+Improved baseline U-NET by adding:pre-activation residual blocks,
+# strided convolutions, InstanceNorm, LeakyReLU and Dropout2d.
+"""
+class ResidualBlock2D(nn.Module):
+    """Pre-activation residual block with instance normalisation and dropout.
+
+    Args:
+        in_channels: Input feature channels.
+        out_channels: Output feature channels.
+        dropout: Fraction of channels randomly dropped during training.
+    """
+
+    def __init__(self, in_channels: int, out_channels: int, dropout: float = 0.3):
+        super().__init__()
+        self.norm1 = nn.InstanceNorm2d(in_channels, affine=True)
+        self.act1 = nn.LeakyReLU(negative_slope=0.01)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3,
+                               padding=1, bias=False)
+        self.dropout = nn.Dropout2d(p=dropout)
+        self.norm2 = nn.InstanceNorm2d(out_channels, affine=True)
+        self.act2 = nn.LeakyReLU(negative_slope=0.01)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
+                               padding=1, bias=False)
+
+        # A 1x1 convolution matches channel counts when they differ.
+        if in_channels == out_channels:
+            self.shortcut = nn.Identity()
+        else:
+            self.shortcut = nn.Conv2d(in_channels, out_channels,
+                                      kernel_size=1, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return learned features plus the original input (residual connection)."""
+        residual = self.shortcut(x)
+        x = self.conv1(self.act1(self.norm1(x)))
+        x = self.dropout(x)
+        x = self.conv2(self.act2(self.norm2(x)))
+        return x + residual
+
+
+class ImprovedEncode(nn.Module):
+    """Downsample with a learned stride-2 convolution, then a residual block."""
+
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.downsample = nn.Conv2d(in_channels, out_channels,
+                                    kernel_size=3, stride=2, padding=1,
+                                    bias=False)
+        self.context = ResidualBlock2D(out_channels, out_channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Halve height/width and extract features."""
+        x = self.downsample(x)
+        return self.context(x)
+
+
+class ImprovedDecode(nn.Module):
+    """Upsample, concatenate encoder features, then refine with convolutions.
+
+    The simple bilinear upsampling is retained in this first version.
+    InstanceNorm and LeakyReLU replace BatchNorm and ReLU here too.
+    """
+
+    def __init__(self, in_channels: int, skip_channels: int, out_channels: int):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels + skip_channels, out_channels,
+                      kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_channels, affine=True),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.Conv2d(out_channels, out_channels,
+                      kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_channels, affine=True),
+            nn.LeakyReLU(negative_slope=0.01),
+        )
+
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        """Return decoder features at the same size as the skip connection."""
+        x = F.interpolate(x, size=skip.shape[-2:], mode="bilinear",
+                          align_corners=False)
+        x = torch.cat((skip, x), dim=1)
+        return self.conv(x)
+
+
+class ImprovedUNet2D(nn.Module):
+    """2D Isensee-inspired U-Net with five architectural improvements.
+
+    Args:
+        in_channels: MRI input channels (1).
+        num_classes: Output segmentation labels (6).
+        base_channels: Feature channels at the first level (64).
+
+    Returns from forward:
+        Raw logits [B, num_classes, H, W], like the baseline UNet2D.
+    """
+
+    def __init__(self, in_channels: int = 1, num_classes: int = 6,
+                 base_channels: int = 64):
+        super().__init__()
+        if in_channels < 1 or num_classes < 1 or base_channels < 1:
+            raise ValueError("Channel counts must be positive integers.")
+
+        c = base_channels
+        self.stem = ResidualBlock2D(in_channels, c)
+        self.down1 = ImprovedEncode(c, 2 * c)
+        self.down2 = ImprovedEncode(2 * c, 4 * c)
+        self.down3 = ImprovedEncode(4 * c, 8 * c)
+        self.down4 = ImprovedEncode(8 * c, 16 * c)
+
+        self.up1 = ImprovedDecode(16 * c, 8 * c, 8 * c)
+        self.up2 = ImprovedDecode(8 * c, 4 * c, 4 * c)
+        self.up3 = ImprovedDecode(4 * c, 2 * c, 2 * c)
+        self.up4 = ImprovedDecode(2 * c, c, c)
+        self.output_conv = nn.Conv2d(c, num_classes, kernel_size=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Produce one full-resolution logit map for each class."""
+        s0 = self.stem(x)
+        s1 = self.down1(s0)
+        s2 = self.down2(s1)
+        s3 = self.down3(s2)
+        x = self.down4(s3)
+
+        x = self.up1(x, s3)
+        x = self.up2(x, s2)
+        x = self.up3(x, s1)
+        x = self.up4(x, s0)
+        return self.output_conv(x)

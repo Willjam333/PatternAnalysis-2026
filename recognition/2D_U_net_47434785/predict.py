@@ -14,13 +14,15 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from pathlib import Path
 from dataset import HipMRIDataset
-from modules import UNet2D
+from modules import UNet2D, ImprovedUNet2D
 
 
 # Change DATA_ROOT if running on Windows instead of Rangpur.
 DATA_ROOT = "/home/groups/comp3710/HipMRI_Study_open/keras_slices_data"
-MODEL_PATH = Path("runs/baseline/best_model.pt")
-SAVE_DIR = Path("runs/baseline/predictions")
+MODELS = {
+    "baseline": UNet2D,
+    "improved": ImprovedUNet2D
+}
 BATCH_SIZE = 2
 BASE_CHANNELS = 64       # Must match the model that created best_model.pt.
 NUM_CLASSES = 6
@@ -79,7 +81,7 @@ def save_comparison(image, ground_truth, prediction, filename):
     plt.close(fig)
 
 
-def evaluate_model(model, test_loader):
+def evaluate_model(model, test_loader, save_dir):
     """Run inference over every test slice, calculate Dice and save examples.
 
     Args:
@@ -124,54 +126,79 @@ def evaluate_model(model, test_loader):
                     image = batch["image"][i, 0, :, left:right].numpy()
                     filename = batch["filename"][i].replace(".nii.gz", ".png")
                     save_comparison(image, truth.numpy(), predicted.numpy(),
-                                    SAVE_DIR / filename)
+                                    save_dir / filename)
                     saved_images += 1
 
-    print(f"Saved {saved_images} comparison images to {SAVE_DIR}")
+    print(f"Saved {saved_images} comparison images to {save_dir}")
     return compute_dice_score(intersections, totals)
 
 
 def main():
-    """Load the trained model and test images, then report prediction results."""
-    SAVE_DIR.mkdir(parents=True, exist_ok=True)
+    """Evaluate both trained U-Nets on the same HipMRI test dataset."""
+
     print("Prediction device:", DEVICE)
 
-    # Load only the provided, unaugmented test split.
+    # Load the test dataset once for both models.
     test_dataset = HipMRIDataset(DATA_ROOT, split="test", augment=False)
+
     if len(test_dataset) == 0:
         raise FileNotFoundError(f"No MRI test images found in {test_dataset.image_dir}")
+
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
     print("Test slices:", len(test_dataset))
 
-    # Reconstruct the SAME U-Net architecture used to save these weights.
-    if not MODEL_PATH.is_file():
-        raise FileNotFoundError(f"Saved model not found: {MODEL_PATH}")
-    model = UNet2D(in_channels=1, num_classes=NUM_CLASSES,
-                   base_channels=BASE_CHANNELS).to(DEVICE)
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE,
-                                     weights_only=True))
-    model.eval()
+    # Evaluate each architecture independently.
+    for model_name, model_class in MODELS.items():
 
-    # Predict, calculate metrics, and save comparisons.
-    scores = evaluate_model(model, test_loader)
+        model_path = Path("runs") / model_name / "best_model.pt"
+        save_dir = Path("runs") / model_name / "predictions"
+        save_dir.mkdir(parents=True, exist_ok=True)
 
-    # Display prostate Dice.
-    print(f"Prostate Dice: {scores[PROSTATE_CLASS]:.4f}")
+        print(f"\nEvaluating {model_name}")
 
-    lines = [f"Test slices: {len(test_dataset)}"]
-    for c, score in enumerate(scores):
-        label = "N/A (absent)" if math.isnan(score) else f"{score:.4f}"
-        lines.append(f"Class {c} Dice: {label}")
+        # Load the trained weights for this architecture.
+        if not model_path.is_file():
+            raise FileNotFoundError(f"Saved model not found: {model_path}")
 
-    foreground = [score for score in scores[1:] if not math.isnan(score)]
-    if foreground:
-        lines.append(f"Mean foreground Dice: {sum(foreground) / len(foreground):.4f}")
+        model = model_class(
+            in_channels=1,
+            num_classes=NUM_CLASSES,
+            base_channels=BASE_CHANNELS
+        ).to(DEVICE)
 
-    report = "\n".join(lines)
-    print("\n" + report)
-    (SAVE_DIR / "dice_results.txt").write_text(report, encoding="utf-8")
-    print("Results saved to:", SAVE_DIR)
+        model.load_state_dict(
+            torch.load(model_path, map_location=DEVICE, weights_only=True)
+        )
+        model.eval()
 
+        # Evaluate all test images and save visualisations.
+        scores = evaluate_model(model, test_loader, save_dir)
+
+        # Create a results report.
+        lines = [f"Model: {model_name}", f"Test slices: {len(test_dataset)}"]
+
+        for c, score in enumerate(scores):
+            label = "N/A (absent)" if math.isnan(score) else f"{score:.4f}"
+            lines.append(f"Class {c} Dice: {label}")
+
+        foreground = [score for score in scores[1:] if not math.isnan(score)]
+
+        if foreground:
+            lines.append(
+                f"Mean foreground Dice: {sum(foreground) / len(foreground):.4f}"
+            )
+
+        lines.append(f"Prostate Dice: {scores[PROSTATE_CLASS]:.4f}")
+
+        report = "\n".join(lines)
+        print("\n" + report)
+
+        (save_dir / "dice_results.txt").write_text(report, encoding="utf-8")
+
+        # Release the current model before loading the next one.
+        del model
+
+    print("\nFinished evaluating both models.")
 
 if __name__ == "__main__":
     main()

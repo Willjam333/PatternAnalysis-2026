@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from pathlib import Path
 from dataset import make_dataloaders
-from modules import UNet2D
+from modules import UNet2D, ImprovedUNet2D
 
 
 # Settings: use the Windows path locally or the Linux path on Rangpur.
@@ -28,8 +28,11 @@ LEARNING_RATE = 1e-4
 BASE_CHANNELS = 64
 NUM_CLASSES = 6
 PROSTATE_CLASS = 5  # Confirm label 5 using official HipMRI label metadata.
-SAVE_DIR = Path("runs/baseline")
-MAX_BATCHES = None      
+MODELS = {
+    "baseline": UNet2D,
+    "improved": ImprovedUNet2D
+}
+MAX_BATCHES = None     
 TEST_AFTER_TRAINING = False   # Set False while developing; True for final evaluation.
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -147,7 +150,7 @@ def run_epoch(model, loader, optimizer=None):
     return loss_sum / image_count, dice
 
 
-def plot_curves(train_losses, val_losses, train_dices, val_dices):
+def plot_curves(train_losses, val_losses, train_dices, val_dices, save_dir):
     """Save loss and prostate Dice plots after each epoch."""
     epochs = range(1, len(train_losses) + 1)
 
@@ -157,7 +160,7 @@ def plot_curves(train_losses, val_losses, train_dices, val_dices):
     plt.xlabel("Epoch")
     plt.ylabel("Combined loss")
     plt.legend()
-    plt.savefig(SAVE_DIR / "loss.png")
+    plt.savefig(save_dir / "loss.png")
     plt.close()
 
     plt.figure()
@@ -166,56 +169,102 @@ def plot_curves(train_losses, val_losses, train_dices, val_dices):
     plt.xlabel("Epoch")
     plt.ylabel("Prostate Dice")
     plt.legend()
-    plt.savefig(SAVE_DIR / "dice.png")
+    plt.savefig(save_dir / "dice.png")
     plt.close()
 
 
-def main():
-    """Train the baseline, save best weights, and optionally evaluate test data."""
-    SAVE_DIR.mkdir(parents=True, exist_ok=True)
-    print("Training on:", DEVICE)
-    loaders = make_dataloaders(DATA_ROOT, batch_size=BATCH_SIZE)
-    model = UNet2D(in_channels=1, num_classes=NUM_CLASSES,
-                   base_channels=BASE_CHANNELS).to(DEVICE)
+def train_model(model_name, model_class, loaders):
+    """Train one U-Net architecture and save its best checkpoint."""
+
+    save_dir = Path("runs") / model_name
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"\nTraining {model_name} on {DEVICE}")
+
+    model = model_class(
+        in_channels=1,
+        num_classes=NUM_CLASSES,
+        base_channels=BASE_CHANNELS
+    ).to(DEVICE)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     train_losses, val_losses = [], []
     train_dices, val_dices = [], []
+
     best_dice = -1.0
-    best_file = SAVE_DIR / "best_model.pt"
+    best_val_loss = float("inf")
+    best_file = save_dir / "best_model.pt"
 
     for epoch in range(EPOCHS):
-        train_loss, train_scores = run_epoch(model, loaders["train"], optimizer)
-        val_loss, val_scores = run_epoch(model, loaders["validate"])
+        train_loss, train_scores = run_epoch(
+            model, loaders["train"], optimizer
+        )
+
+        val_loss, val_scores = run_epoch(
+            model, loaders["validate"]
+        )
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
+
         train_dices.append(train_scores[PROSTATE_CLASS])
         val_dices.append(val_scores[PROSTATE_CLASS])
 
-        print(f"Epoch {epoch + 1}/{EPOCHS} | "
-              f"Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f} | "
-              f"Val prostate Dice: {val_scores[PROSTATE_CLASS]:.4f}")
+        print(
+            f"{model_name} | Epoch {epoch + 1}/{EPOCHS} | "
+            f"Train loss: {train_loss:.4f} | "
+            f"Val loss: {val_loss:.4f} | "
+            f"Val prostate Dice: {val_scores[PROSTATE_CLASS]:.4f}"
+        )
 
-        if epoch == 0 or val_scores[PROSTATE_CLASS] > best_dice:
-            best_dice = val_scores[PROSTATE_CLASS]
+        # Select the best checkpoint using validation performance.
+        score = val_scores[PROSTATE_CLASS]
+
+        if score != score:  # Handle undefined Dice (NaN).
+            score = -1.0
+
+        if score > best_dice or (
+            score == best_dice and val_loss < best_val_loss
+        ):
+            best_dice = score
+            best_val_loss = val_loss
             torch.save(model.state_dict(), best_file)
             print("  Saved best model")
 
-        plot_curves(train_losses, val_losses, train_dices, val_dices)
+        plot_curves(
+            train_losses, val_losses,
+            train_dices, val_dices, save_dir
+        )
 
     if TEST_AFTER_TRAINING:
-        model.load_state_dict(torch.load(best_file, map_location=DEVICE,
-                                         weights_only=True))
+        model.load_state_dict(
+            torch.load(best_file, map_location=DEVICE, weights_only=True)
+        )
+
         test_loss, test_scores = run_epoch(model, loaders["test"])
+
         results = f"Test loss: {test_loss:.4f}\n"
         for c, score in enumerate(test_scores):
             results += f"Class {c} Dice: {score:.4f}\n"
+
         print(results)
-        (SAVE_DIR / "test_results.txt").write_text(results)
+        (save_dir / "test_results.txt").write_text(results)
 
-    print("Finished. Files saved in:", SAVE_DIR)
+    print(f"Finished training {model_name}. Saved to {save_dir}")
 
+
+def main():
+    """Train both architectures using the same HipMRI data splits."""
+
+    print("Training device:", DEVICE)
+
+    loaders = make_dataloaders(
+        DATA_ROOT, batch_size=BATCH_SIZE
+    )
+
+    for model_name, model_class in MODELS.items():
+        train_model(model_name, model_class, loaders)
 
 if __name__ == "__main__":
     main()
