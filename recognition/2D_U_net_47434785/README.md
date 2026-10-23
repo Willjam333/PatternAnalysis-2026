@@ -7,8 +7,29 @@ COMP3710 - Pattern Recognition and Analysis
 The University of Queensland
 
 ## Overview
+This project investigates automatic prostate segmentation from magnetic resonance imaging (MRI) using a baseline and advanced U-Net models. The implementation of a standard 2D U-net (based on Ronneberger et al. (2015)) and an improved 2D U-net (based on Isensee et al. (2018)) were compared. Both models are trained on the provided HipMRI dataset and evaluated using segmentation metrics, with particular attention to prostate Dice score and boundary errors.
+
+The problem to be analysed is that automated segnementation trained purely on global dice scores can mask critical boundary failure modes. These failure modes may impact radiotherapy planning and therefore treatment accruacy. The model comparison will identify whether architectural improvements reduce segmentation failure cases sufficiently to justify increases in computational cost. Both models must also achieve a Target Dice ≥ 0.75 on prostate label the test set.
+
+## How Algorithm Works
+The U-Nets are convolutional neural networks designed for pixel-level image segmentation. It uses an encoder to reduce image resolution and extract features. The decoder upsamples these features to reconstruct a segmentation mask. Skip connections are used to recover spacial detail from the encoder. The improved model uses this structure but also introduces pre-activation residual blocks, strided convolutions, InstanceNorm, LeakyReLU and dropout to support feature learning and reduce overfitting. Refer to key features for more information. 
+
+The image below shows an example of the 2D Improved U-Net model architecture developed by Isensee et al. (2018). 
+
+![Original 3D U-Net architecture from Isensee et al. (2018)](Figures/isensee_architecture.png)
+
 
 ## Key Features 
+| Feature | Baseline 2D U-Net | Improved 2D U-Net |
+|---|---|---|
+| Feature extraction | Double convolution blocks | Pre-activation residual blocks |
+| Downsampling | Max pooling | Strided convolutions |
+| Normalisation | BatchNorm | InstanceNorm |
+| Activation | ReLU | LeakyReLU (slope = 0.01) |
+| Regularisation | No dropout | Dropout2d (p = 0.3) |
+| Upsampling | Bilinear interpolation | Bilinear interpolation |
+| Skip connections | Encoder-decoder connections | Encoder-decoder and residual connections |
+| Output | Six segmentation classes | Six segmentation classes |
 
 ## Feasibility Review
 
@@ -98,6 +119,8 @@ Data Augmentation: Small random brightness and contrast adjustments are applied 
 ## Investigation
 
 ## References
+Isensee, F., Kickingereder, P., Wick, W., Bendszus, M., & Maier-Hein, K. H. (2018). Brain tumor segmentation and radiomics survival prediction: Contribution to the BRATS 2017 challenge. In A. Crimi, S. Bakas, H. Kuijf, B. Menze, & M. Reyes (Eds.), Brainlesion: Glioma, multiple sclerosis, stroke and traumatic brain injuries (pp. 287–297). Springer. https://doi.org/10.1007/978-3-319-75238-9_25
+
 PyTorch contributors. (n.d.). Datasets & DataLoaders. PyTorch. https://docs.pytorch.org/docs/stable/data.html
 
 The University of Queensland. (2026). COMP3710 pattern recognition: Assignment specification (Appendix B) [Unpublished course material].
