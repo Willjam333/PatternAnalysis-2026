@@ -135,8 +135,9 @@ class UNet2D(nn.Module):
 
 
 """Improved U-NET Architecture (adapted from Isensee et al., 2018)
-Improved baseline U-NET by adding:pre-activation residual blocks,
-# strided convolutions, InstanceNorm, LeakyReLU and Dropout2d.
+Improved baseline U-NET using pre-activation residual blocks, strided
+convolutions, InstanceNorm, LeakyReLU, Dropout2d, decoder localisation
+and multiscale deep supervision.
 """
 class ResidualBlock2D(nn.Module):
     """Pre-activation residual block with instance normalisation and dropout.
@@ -192,27 +193,26 @@ class ImprovedEncode(nn.Module):
 
 
 class ImprovedDecode(nn.Module):
-    """Upsample, concatenate encoder features, then refine with convolutions.
+    """Upsample and concatenate a skip connection, then localise features.
 
-    The simple bilinear upsampling is retained in this first version.
-    InstanceNorm and LeakyReLU replace BatchNorm and ReLU here too.
+    The 2D localisation module adapts the 3x3 -> 1x1 convolution pattern
+    of Isensee et al. (2018). The 1x1 convolution reduces channel count.
     """
 
     def __init__(self, in_channels: int, skip_channels: int, out_channels: int):
         super().__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels + skip_channels, out_channels,
+            nn.Conv2d(in_channels + skip_channels, 2 * out_channels,
                       kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_channels, affine=True),
+            nn.InstanceNorm2d(2 * out_channels, affine=True),
             nn.LeakyReLU(negative_slope=0.01),
-            nn.Conv2d(out_channels, out_channels,
-                      kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(2 * out_channels, out_channels, kernel_size=1, bias=False),
             nn.InstanceNorm2d(out_channels, affine=True),
             nn.LeakyReLU(negative_slope=0.01),
         )
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
-        """Return decoder features at the same size as the skip connection."""
+        """Return localised decoder features at the skip connection's size."""
         x = F.interpolate(x, size=skip.shape[-2:], mode="bilinear",
                           align_corners=False)
         x = torch.cat((skip, x), dim=1)
@@ -220,15 +220,13 @@ class ImprovedDecode(nn.Module):
 
 
 class ImprovedUNet2D(nn.Module):
-    """2D Isensee-inspired U-Net with five architectural improvements.
+    """Isensee-inspired 2D U-Net with decoder localisation and deep supervision.
 
-    Args:
-        in_channels: MRI input channels (1).
-        num_classes: Output segmentation labels (6).
-        base_channels: Feature channels at the first level (64).
+    The four decoder output heads produce logits at different resolutions.
+    Their upsampled logits are summed; the existing training loss therefore
+    propagates gradients to all heads without modifying train.py's loss.
 
-    Returns from forward:
-        Raw logits [B, num_classes, H, W], like the baseline UNet2D.
+    Forward output remains [B, num_classes, H, W], matching UNet2D.
     """
 
     def __init__(self, in_channels: int = 1, num_classes: int = 6,
@@ -238,20 +236,27 @@ class ImprovedUNet2D(nn.Module):
             raise ValueError("Channel counts must be positive integers.")
 
         c = base_channels
+        # Original improved encoder remains unchanged.
         self.stem = ResidualBlock2D(in_channels, c)
         self.down1 = ImprovedEncode(c, 2 * c)
         self.down2 = ImprovedEncode(2 * c, 4 * c)
         self.down3 = ImprovedEncode(4 * c, 8 * c)
         self.down4 = ImprovedEncode(8 * c, 16 * c)
 
+        # Localisation decoder: 3x3 convolution followed by 1x1 reduction.
         self.up1 = ImprovedDecode(16 * c, 8 * c, 8 * c)
         self.up2 = ImprovedDecode(8 * c, 4 * c, 4 * c)
         self.up3 = ImprovedDecode(4 * c, 2 * c, 2 * c)
         self.up4 = ImprovedDecode(2 * c, c, c)
+
+        # Four segmentation heads for multi-scale deep supervision.
+        self.seg_coarse = nn.Conv2d(8 * c, num_classes, kernel_size=1)
+        self.seg_middle = nn.Conv2d(4 * c, num_classes, kernel_size=1)
+        self.seg_fine = nn.Conv2d(2 * c, num_classes, kernel_size=1)
         self.output_conv = nn.Conv2d(c, num_classes, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Produce one full-resolution logit map for each class."""
+        """Return summed full-resolution logits for all six classes."""
         s0 = self.stem(x)
         s1 = self.down1(s0)
         s2 = self.down2(s1)
@@ -259,7 +264,26 @@ class ImprovedUNet2D(nn.Module):
         x = self.down4(s3)
 
         x = self.up1(x, s3)
+        coarse = self.seg_coarse(x)
+
         x = self.up2(x, s2)
+        middle = self.seg_middle(x)
+
         x = self.up3(x, s1)
+        fine = self.seg_fine(x)
+
         x = self.up4(x, s0)
-        return self.output_conv(x)
+        full = self.output_conv(x)
+
+        # The same full-resolution loss supervises every intermediate head.
+        target_size = full.shape[-2:]
+        output = (
+            full
+            + F.interpolate(fine, size=target_size, mode="bilinear",
+                            align_corners=False)
+            + F.interpolate(middle, size=target_size, mode="bilinear",
+                            align_corners=False)
+            + F.interpolate(coarse, size=target_size, mode="bilinear",
+                            align_corners=False)
+        )
+        return output
