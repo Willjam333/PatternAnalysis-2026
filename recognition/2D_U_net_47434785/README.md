@@ -80,6 +80,97 @@ The next experiment will be to standardise image dimension and run a short stand
 If improved U-Net fails to improve boundary accuracy, the standard U-Net will be recommended as the more efficient alternative, supported by the experimental results.
 
 ## Dependencies
+The project was developed in Python using PyTorch for neural network training and inference. Training was conducted on the University of Queensland's Rangpur computing cluster using GPU acceleration and a Conda environment named torch.
+
+| Library | Version | Purpose |
+|---|---|---|
+| Python | 3.11.15 | Programming language |
+| PyTorch | 2.13.0 | Neural network training and inference |
+| NumPy | 2.4.6 | MRI preprocessing and numerical operations |
+| NiBabel | 5.4.2 | Loading NIfTI MRI images and segmentation masks |
+| Matplotlib | 3.11.2 | Training curves and segmentation visualisations |
+| tqdm | 4.70.1 | Progress bars |
+| CUDA | 13.0 | GPU acceleration |
+
+All Python dependencies, including supporting CUDA libraries, are recorded with exact versions in `requirements.txt`.
+
+### Project Structure
+```text
+2D_U_net_47434785/
+├── dataset.py             # Dataset loading and preprocessing
+├── modules.py             # Baseline and Improved U-Net architectures
+├── train.py               # Model training and validation
+├── predict.py             # Test evaluation and visualisations
+├── train_unets.sbatch     # Rangpur GPU training script
+├── requirements.txt       # Exact Python dependency versions
+├── Figures/               # Architecture diagrams
+└── README.md              # Project documentation
+```
+
+Model checkpoints and generated results are saved under `runs/baseline/` and `runs/improved/`.
+
+### Installation
+
+Python 3.11 and a compatible GPU environment are recommended. The project was trained using a Conda environment named `torch`.
+
+To install the Python dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+On Rangpur, activate the existing environment using:
+
+```bash
+source ~/miniconda3/bin/activate
+conda activate torch
+```
+
+The HipMRI dataset is available on Rangpur at:
+
+```text
+/home/groups/comp3710/HipMRI_Study_open/keras_slices_data
+```
+
+The `DATA_ROOT` variable in `train.py` and `predict.py` must point to the dataset location.
+
+To train the models on Rangpur:
+
+```bash
+sbatch train_unets.sbatch
+```
+
+To evaluate the trained checkpoints:
+
+```bash
+python predict.py
+```
+
+The scripts save model checkpoints, training curves and test predictions to their respective directories under `runs/`.
+
+### Reproducibility
+
+Both models used the same predefined, patient-independent HipMRI dataset partitions: 11,460 training slices, 660 validation slices and 540 test slices.
+
+The following hyperparameters were used:
+
+| Parameter | Baseline U-Net | Improved U-Net |
+|---|---|---|
+| Training epochs | 30 | 30 |
+| Initial feature channels | 32 | 32 |
+| Batch size | 8 | 8 |
+| Optimiser | Adam | Adam |
+| Learning rate | 0.0001 | 0.0001 |
+| Loss function | Cross-entropy + Dice | Cross-entropy + Dice |
+| Data augmentation | Brightness and contrast | Brightness and contrast |
+| Model selection | Best validation prostate Dice | Best validation prostate Dice |
+
+All MRI slices were Z-score normalised and centre-padded to 256 × 144 pixels. Random brightness and contrast adjustments were applied only during training, with no augmentation during validation or testing.
+
+The best checkpoint was selected using validation prostate Dice to avoid selecting models based on test-set performance.
+
+Random seeds and deterministic CUDA operations were not explicitly configured in the recorded training scripts. Consequently, results may vary between training runs due to random initialisation, data shuffling, augmentation and GPU computation. Exact reproduction of the reported Dice scores is therefore not guaranteed, even when using the same dependencies and hyperparameters.
+
 
 ## Example Inputs,Outputs & visual plots
 
