@@ -109,24 +109,31 @@ All Python dependencies, including supporting CUDA libraries, are recorded with 
 
 Model checkpoints and generated results are saved under `runs/baseline/` and `runs/improved/`.
 
-### Installation
+### Installation, Training & Predicting
 
 Python 3.11 and a compatible GPU environment are recommended. The project was trained using a Conda environment named `torch`.
 
-To install the Python dependencies:
+Miniconda must first be installed. On Rangpur, where Miniconda is installed in the user's home directory, Conda can be initialised using
+
+```bash
+source ~/miniconda3/bin/activate
+```
+
+Create and activate the `torch` environment with Python 3.11.15:
+
+```bash
+conda create -n torch python=3.11.15 -y
+conda activate torch
+```
+
+Install the Python Dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-On Rangpur, activate the existing environment using:
 
-```bash
-source ~/miniconda3/bin/activate
-conda activate torch
-```
-
-The HipMRI dataset is available on Rangpur at:
+The project uses the HipMRI dataset available on Rangpur at:
 
 ```text
 /home/groups/comp3710/HipMRI_Study_open/keras_slices_data
@@ -134,10 +141,39 @@ The HipMRI dataset is available on Rangpur at:
 
 The `DATA_ROOT` variable in `train.py` and `predict.py` must point to the dataset location.
 
-To train the models on Rangpur:
+The dataset must contain the following directories:
+
+```text
+keras_slices_data/
+├── keras_slices_train/
+├── keras_slices_seg_train/
+├── keras_slices_validate/
+├── keras_slices_seg_validate/
+├── keras_slices_test/
+└── keras_slices_seg_test/
+```
+
+To train the models on Rangpur, navigate to the project directory and submit the Slurm batch script:
 
 ```bash
+cd ~/2D_U_net_47434785
 sbatch train_unets.sbatch
+```
+The batch script automatically activates the existing `torch` environment and executes `train.py` using the allocated GPU resources.
+
+**Note:** The batch script assumes an environment named `torch` already exists. If a newly created environment uses a different name, update the `conda activate torch` line in `train_unets.sbatch` accordingly.
+
+Alternatively, training can be executed directly on a local computer or allocated GPU compute node within an activated environment using:
+
+```bash
+python train.py
+```
+
+The best-performing checkpoint for each model is saved according to validation prostate Dice:
+
+```text
+runs/baseline/best_model.pt
+runs/improved/best_model.pt
 ```
 
 To evaluate the trained checkpoints:
@@ -147,6 +183,7 @@ python predict.py
 ```
 
 The scripts save model checkpoints, training curves and test predictions to their respective directories under `runs/`.
+The initial feature channel settings in `predict.py` must match those used to generate each saved checkpoint.
 
 ### Reproducibility
 
