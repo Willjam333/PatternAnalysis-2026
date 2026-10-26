@@ -12,9 +12,9 @@ This project investigates automatic prostate segmentation from magnetic resonanc
 The problem to be analysed is that automated segnementation trained purely on global dice scores can mask critical boundary failure modes. These failure modes may impact radiotherapy planning and therefore treatment accruacy. The model comparison will identify whether architectural improvements reduce segmentation failure cases sufficiently to justify increases in computational cost. Both models must also achieve a Target Dice ≥ 0.75 on prostate label the test set.
 
 ## How Algorithm Works
-The U-Nets are convolutional neural networks designed for pixel-level image segmentation. It uses an encoder to reduce image resolution and extract features. The decoder upsamples these features to reconstruct a segmentation mask. Skip connections are used to recover spacial detail from the encoder. The improved model uses this structure but also introduces pre-activation residual blocks, strided convolutions, InstanceNorm, LeakyReLU and dropout to support feature learning and reduce overfitting. Refer to key features for more information. 
+The U-Nets are convolutional neural networks designed for pixel-level image segmentation. The models use an encoder to reduce image resolution and extract features. The decoder upsamples these features to reconstruct a segmentation mask. Skip connections are used to recover spacial detail from the encoder. The improved model uses this structure but also introduces pre-activation residual blocks, strided convolutions, InstanceNorm, LeakyReLU and dropout to support feature learning and reduce overfitting. Refer to key features for more information. 
 
-The image below shows an example of the 2D Improved U-Net model architecture developed by Isensee et al. (2018). 
+The image below shows an example of the 2D Improved U-Net model architecture developed by Isensee et al. (2018). The improved U-NET model implements most of this architecture. It differs to the reference by using billinear interpretation for upsampling instead of feature repetition followed by 3x3 convolution. 
 
 ![Original 3D U-Net architecture from Isensee et al. (2018)](Figures/isensee_architecture.png)
 
@@ -209,7 +209,41 @@ The best checkpoint was selected using validation prostate Dice to avoid selecti
 Random seeds and deterministic CUDA operations were not explicitly configured in the recorded training scripts. Consequently, results may vary between training runs due to random initialisation, data shuffling, augmentation and GPU computation. Exact reproduction of the reported Dice scores is therefore not guaranteed, even when using the same dependencies and hyperparameters.
 
 
-## Example Inputs,Outputs & visual plots
+## Example Input, Output & Training plots
+
+### Input
+The models take a single-channel, Z-score normalised 2D MRI slice as input. 
+
+![Example Model Input](Figures/Example_input.png)
+
+### Output
+
+The figures below compare the predicted segmentations produced by the baseline and improved U-Nets on the same held-out test image. Each figure displays the original MRI, the ground-truth segmentation and the corresponding model prediction. Purple area is what the model is predicting as the prostate
+
+![Example Baseline Model Output](Figures/Example_baseline_output.png)
+
+![Example Improved Model Output](Figures/Example_improved_output.png)
+
+### Training & Validation Dice Scores & Loss
+The following graphs show the prostate Dice coefficient and the combined cross-entropy and Dice loss across training epochs for both models.
+
+| Baseline U-Net | Improved U-Net |
+|---|---|
+| ![Baseline Dice curve](Figures/baseline_dice.png) | ![Improved Dice curve](Figures/improved_dice.png) |
+
+
+
+| Baseline U-Net | Improved U-Net |
+|---|---|
+| ![Baseline loss curve](Figures/baseline_loss.png) | ![Improved loss curve](Figures/improved_loss.png) |
+
+Both models demonstrate successful optimisation. To elaborate Dice scores increase and training loss decreases throughout the 30 epochs. 
+
+Both architectures achieved comparable validation performance, suggesting that the additional complexity of the improved U-Net did not produce a substantial improvement in generalisation.
+
+The increasing gap between training and validation performance suggests some degree of overfitting. This may be influenced by the relatively small number of independent training patients (31), despite the large number of MRI slices.
+
+ 
 
 ## DataSet and Preprocessing
 The dataset refers to the HipMRI keras_slices_data dataset, provided by UQ at /home/groups/comp3710/HipMRI_Study_open/keras_slices_data on the Rangpur computing cluster. 
