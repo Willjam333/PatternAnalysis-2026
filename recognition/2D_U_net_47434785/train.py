@@ -1,13 +1,10 @@
-"""Train, validate and test the baseline 2D U-Net on HipMRI.
+"""Train, validate and test the baseline and improved 2D U-Net on HipMRI.
 
-Training pattern adapted from the user's provided examples and PyTorch's
-optimisation tutorial:
+Training pattern adapted from PyTorch's optimisation tutorial:
 https://docs.pytorch.org/tutorials/beginner/basics/optimization_tutorial.html
 HipMRI-specific Dice loss, padding handling and metrics developed with
 ChatGPT assistance. The architecture and dataset are imported, not redefined.
 """
-
-
 
 import matplotlib
 matplotlib.use("Agg")  # Save plots on Rangpur without a graphical display.
@@ -23,9 +20,9 @@ from modules import UNet2D, ImprovedUNet2D
 # Settings: use the Windows path locally or the Linux path on Rangpur.
 DATA_ROOT = "/home/groups/comp3710/HipMRI_Study_open/keras_slices_data"
 BATCH_SIZE = 8
-EPOCHS = 50
+EPOCHS = 30
 LEARNING_RATE = 1e-4
-BASE_CHANNELS = 64
+BASE_CHANNELS = 32
 NUM_CLASSES = 6
 PROSTATE_CLASS = 5  # Confirm label 5 using official HipMRI label metadata.
 MODELS = {
