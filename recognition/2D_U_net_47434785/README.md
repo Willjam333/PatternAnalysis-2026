@@ -311,14 +311,38 @@ The measurements represent the computational requirements of applying trained mo
 
 The improved U-Net required 62.1% more parameters, 46.0% more peak allocated GPU memory and 68.5% longer inference time compared with the baseline. Despite this increase in computational requirements, the improved model achieved only a marginal increase in prostate Dice (0.8598 to 0.8607) and IoU (0.7540 to 0.7554).
 
-### Failure Cases
+### Failure Autopsies
+#### Lowest average prostate dice in both Models
+![Case 1 - Complete detection failure](Figures/case_1_case_040_week_1_slice_39.png)
+ 
+
+#### Worst Baseline prostate dice in comparison to Improved
+![Case 2 - Improved model recovery](Figures/case_2_case_040_week_1_slice_21.png)
+
+
+#### Worst Improved prostate dice in comparison to Baseline
+![Case 3 - Improved model under-segmentation](Figures/case_3_case_040_week_0_slice_36.png)
+
+#### Most False Positives
+![Case 4 - Prostate over-segmentation](Figures/case_4_case_041_week_0_slice_39.png)
+#### Most False Negatives
+![Case 5 - Prostate boundary under-segmentation](Figures/case_5_case_042_week_0_slice_20.png)
+
+The failure autopsies support why aggregate Dice coefficients are not a sufficient indicators of automatic prostate identification reliability. Both models satisfy the target dice of 0.75 however this masks the failure modes identified above. The analysis identified three failure modes, complete prostate omission, over-segmentation and under-segmentation. Smaller prostate regions appeared particularly challenging as highlighted by case 1 & 2. Although, larger regions still constituted signficiant boundary errors indicating segmentation issues are not only dictated by size.
+
+The improved U-Net sucessfully identified prostate tissue missed byt the baseline in Case 2 and showed less under-segmentation in case 4. However, the baseline U-Net identified more prostate in case 3 and showed less oversegmentation in case 5. This supports that additional architectural complexity does not consistently improve boundary reliability. Aswell, the autopsy highlights the the limitations of relying on aggregate overlap metrics. 
+
 
 ### Engineering Recommendation 
+Neither model is recommended for unsupervised clinical use. Failure cases indicate that automatically generated contoours should still undergo expert review. 
 
+Both models exceed the required prostate dice threshold. The improved U-NET archieved marginally better results (+0.0009 Dice, +0.0014 IoU) at the cost of 46% increase in peak GPU VRAM and 77.5% increase in inference latency. Both models exhibited significant boundary innaccuracies depsite achieving relatively high dice scores. Therefore, the baseline 2D U-Net model is recommended for further development due to similar performance with higher computational efficiency. Future development should prioritise small region detection, validation on a larger number of individual patients and implementing boundary senstive loss functions.
 ## References
 Isensee, F., Kickingereder, P., Wick, W., Bendszus, M., & Maier-Hein, K. H. (2018). Brain tumor segmentation and radiomics survival prediction: Contribution to the BRATS 2017 challenge. In A. Crimi, S. Bakas, H. Kuijf, B. Menze, & M. Reyes (Eds.), Brainlesion: Glioma, multiple sclerosis, stroke and traumatic brain injuries (pp. 287–297). Springer. https://doi.org/10.1007/978-3-319-75238-9_25
 
 PyTorch contributors. (n.d.). Datasets & DataLoaders. PyTorch. https://docs.pytorch.org/docs/stable/data.html
 
 The University of Queensland. (2026). COMP3710 pattern recognition: Assignment specification (Appendix B) [Unpublished course material].
+
 ## Ai Usage Disclosure
+OpenAi ChatGPT-6 was used for assisting the interpretation of baseline and improved U-Net architectures, developing and debugging python code, diagnosing Slurm errors, planning the project structure and refining README documentation. AI assisted code and recommendations were reviewed and tested through reading each Ai generated output, prompting for justification/explanation, local smoke tests for each modified file to test individual functionality and inspection of generated results. The student takes responsibility for the final implementation, reported results and conclusions. 
