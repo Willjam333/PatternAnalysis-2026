@@ -218,14 +218,14 @@ The models take a single-channel, Z-score normalised 2D MRI slice as input.
 
 ### Output
 
-The figures below compare the predicted segmentations produced by the baseline and improved U-Nets on the same held-out test image. Each figure displays the original MRI, the ground-truth segmentation and the corresponding model prediction. Purple area is what the model is predicting as the prostate
+The figures below show the predicted segmentations produced by the baseline and improved U-Nets on the same held-out test image. Each figure displays the original MRI, the ground-truth segmentation and the corresponding model prediction. Purple area is what the model is predicting as the prostate.
 
 ![Example Baseline Model Output](Figures/Example_baseline_output.png)
 
 ![Example Improved Model Output](Figures/Example_improved_output.png)
 
 ### Training & Validation Dice Scores & Loss
-The following graphs show the prostate Dice coefficient and the combined cross-entropy and Dice loss across training epochs for both models.
+The following graphs show the prostate Dice coefficient and the combined cross-entropy and Dice loss across training epochs for both models. Training was performed on the Rangpur GPU cluster using an NVIDIA A100-PCIE-40GB GPU.
 
 | Baseline U-Net | Improved U-Net |
 |---|---|
@@ -237,7 +237,7 @@ The following graphs show the prostate Dice coefficient and the combined cross-e
 |---|---|
 | ![Baseline loss curve](Figures/baseline_loss.png) | ![Improved loss curve](Figures/improved_loss.png) |
 
-Both models demonstrate successful optimisation. To elaborate Dice scores increase and training loss decreases throughout the 30 epochs. 
+Both models demonstrate successful optimisation. To elaborate dice scores increase and training loss decreases throughout the 30 epochs. 
 
 Both architectures achieved comparable validation performance, suggesting that the additional complexity of the improved U-Net did not produce a substantial improvement in generalisation.
 
@@ -279,6 +279,41 @@ Segmentation Mask Encoding: The to_channels() function adapted from Appendix B c
 Data Augmentation: Small random brightness and contrast adjustments are applied to training MRI images to encourage generalisation and reduce overfitting. These adjustments are not applied to segmentation masks or to validation and test images.
 
 ## Investigation
+Both models were evaluated on the same heldout HipMRI test split using identical preprocessing and evalutation procedures. 
+
+### Quantitative Results
+| Class | Baseline Dice | Improved Dice | Baseline IoU | Improved IoU |
+|---|---:|---:|---:|---:|
+| 0 | 0.9968 | 0.9967 | 0.9936 | 0.9934 |
+| 1 | 0.9843 | 0.9847 | 0.9691 | 0.9699 |
+| 2 | 0.9329 | 0.9360 | 0.8742 | 0.8798 |
+| 3 | 0.9668 | 0.9642 | 0.9358 | 0.9309 |
+| 4 | 0.8633 | 0.8605 | 0.7594 | 0.7552 |
+| **5 – Prostate** | **0.8598** | **0.8607** | **0.7540** | **0.7554** |
+| **Mean foreground Dice** | **0.9214** | **0.9212** | — | — |
+
+Both models satsify the target prostate dice coeeficient of 0.75. The improved U-NET achieved a marginally higher prostate dice score of 0.8607 compares to 0.8958. However, the baseline achieved a slightly higher mean foreground dice (0.9214 instead of 0.9212). The improved model also had a slightyly higher prostate IoU of 0.7554 instead of 0.7540. The results above show that the additional architectural complexity did not produce a consistent or significant improvement across segmentation classes. 
+
+The small prostate dice and IoU difference is not significant enough to establish superiority of the improved model. Further evaluation across additional patients would be beneficial to see if the marginal difference is consistent. 
+
+### Computational Efficiency
+
+| Resource | Baseline U-Net | Improved U-Net | Percentage Increase |
+|---|---:|---:|---:|
+| Parameter count | 7,849,190 | 12,727,066 | 62.1% |
+| Median inference latency (ms/slice) | 4.774 | 8.473 | 77.5% |
+| Peak allocated GPU memory (MiB) | 64.3 | 93.9 | 46.0% |
+| Peak reserved GPU memory (MiB) | 80.0 | 120.0 | 50.0% |
+
+Computational efficiency was evaluated locally using an NVIDIA RTX 3060 Laptop GPU, with Pytorch 2.13.0 and CUDA 13.0. Inference latency was measured using a single 2D MRI slice, with 10 warm-up passes followed by 30 CUDA-synchronised forward passes.
+
+The measurements represent the computational requirements of applying trained models to MRI slices not while training them. The measurements exclude data loading, backpropagation and model optimisation. 
+
+The improved U-Net required 62.1% more parameters, 46.0% more peak allocated GPU memory and 68.5% longer inference time compared with the baseline. Despite this increase in computational requirements, the improved model achieved only a marginal increase in prostate Dice (0.8598 to 0.8607) and IoU (0.7540 to 0.7554).
+
+### Failure Cases
+
+### Engineering Recommendation 
 
 ## References
 Isensee, F., Kickingereder, P., Wick, W., Bendszus, M., & Maier-Hein, K. H. (2018). Brain tumor segmentation and radiomics survival prediction: Contribution to the BRATS 2017 challenge. In A. Crimi, S. Bakas, H. Kuijf, B. Menze, & M. Reyes (Eds.), Brainlesion: Glioma, multiple sclerosis, stroke and traumatic brain injuries (pp. 287–297). Springer. https://doi.org/10.1007/978-3-319-75238-9_25
