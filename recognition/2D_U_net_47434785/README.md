@@ -292,7 +292,7 @@ Both models were evaluated on the same heldout HipMRI test split using identical
 | **5 – Prostate** | **0.8598** | **0.8607** | **0.7540** | **0.7554** |
 | **Mean foreground Dice** | **0.9214** | **0.9212** | — | — |
 
-Both models satsify the target prostate dice coeeficient of 0.75. The improved U-NET achieved a marginally higher prostate dice score of 0.8607 compares to 0.8958. However, the baseline achieved a slightly higher mean foreground dice (0.9214 instead of 0.9212). The improved model also had a slightyly higher prostate IoU of 0.7554 instead of 0.7540. The results above show that the additional architectural complexity did not produce a consistent or significant improvement across segmentation classes. 
+Both models satsify the target prostate dice coeeficient of 0.75. The improved U-NET achieved a marginally higher prostate dice score of 0.8607 compares to 0.8598. However, the baseline achieved a slightly higher mean foreground dice (0.9214 instead of 0.9212). The improved model also had a slightyly higher prostate IoU of 0.7554 instead of 0.7540. The results above show that the additional architectural complexity did not produce a consistent or significant improvement across segmentation classes. 
 
 The small prostate dice and IoU difference is not significant enough to establish superiority of the improved model. Further evaluation across additional patients would be beneficial to see if the marginal difference is consistent. 
 
@@ -309,7 +309,7 @@ Computational efficiency was evaluated locally using an NVIDIA RTX 3060 Laptop G
 
 The measurements represent the computational requirements of applying trained models to MRI slices not while training them. The measurements exclude data loading, backpropagation and model optimisation. 
 
-The improved U-Net required 62.1% more parameters, 46.0% more peak allocated GPU memory and 68.5% longer inference time compared with the baseline. Despite this increase in computational requirements, the improved model achieved only a marginal increase in prostate Dice (0.8598 to 0.8607) and IoU (0.7540 to 0.7554).
+The improved U-Net required 62.1% more parameters, 46.0% more peak allocated GPU memory and 77.5% longer inference time compared with the baseline. Despite this increase in computational requirements, the improved model achieved only a marginal increase in prostate Dice (0.8598 to 0.8607) and IoU (0.7540 to 0.7554).
 
 ### Failure Autopsies
 #### Lowest average prostate dice in both Models
@@ -330,7 +330,7 @@ The improved U-Net required 62.1% more parameters, 46.0% more peak allocated GPU
 
 The failure autopsies support why aggregate Dice coefficients are not a sufficient indicators of automatic prostate identification reliability. Both models satisfy the target dice of 0.75 however this masks the failure modes identified above. The analysis identified three failure modes, complete prostate omission, over-segmentation and under-segmentation. Smaller prostate regions appeared particularly challenging as highlighted by case 1 & 2. Although, larger regions still constituted signficiant boundary errors indicating segmentation issues are not only dictated by size.
 
-The improved U-Net sucessfully identified prostate tissue missed byt the baseline in Case 2 and showed less under-segmentation in case 4. However, the baseline U-Net identified more prostate in case 3 and showed less oversegmentation in case 5. This supports that additional architectural complexity does not consistently improve boundary reliability. Aswell, the autopsy highlights the the limitations of relying on aggregate overlap metrics. 
+The improved U-Net sucessfully identified prostate tissue missed byt the baseline in Case 2 and showed less over-segmentation in case 4. However, the baseline U-Net identified more prostate in case 3 and showed less oversegmentation in case 5. This supports that additional architectural complexity does not consistently improve boundary reliability. Aswell, the autopsy highlights the the limitations of relying on aggregate overlap metrics. 
 
 
 ### Engineering Recommendation 
@@ -345,4 +345,4 @@ PyTorch contributors. (n.d.). Datasets & DataLoaders. PyTorch. https://docs.pyto
 The University of Queensland. (2026). COMP3710 pattern recognition: Assignment specification (Appendix B) [Unpublished course material].
 
 ## Ai Usage Disclosure
-OpenAi ChatGPT-6 was used for assisting the interpretation of baseline and improved U-Net architectures, developing and debugging python code, diagnosing Slurm errors, planning the project structure and refining README documentation. AI assisted code and recommendations were reviewed and tested through reading each Ai generated output, prompting for justification/explanation, local smoke tests for each modified file to test individual functionality and inspection of generated results. The student takes responsibility for the final implementation, reported results and conclusions. 
+OpenAi ChatGPT-6 was used for assisting the interpretation of baseline and improved U-Net architectures, planning data auditing, developing and debugging python code, diagnosing Slurm errors, planning the project structure and refining README documentation. AI assisted code and recommendations were reviewed against the assignment requirements and the referenced U-Net architecture. Ai generated content was verified by carefully reading each Ai generated output, prompting for justification/explanation, local smoke tests for each modified file to test individual functionality and inspection of model generated results (e.g. segmentation predictions). The student takes responsibility for the final implementation, reported results and conclusions. 
