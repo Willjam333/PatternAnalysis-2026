@@ -1,3 +1,10 @@
+"""
+Load and preprocess HipMRI data for U-Net segmentation.
+
+Provides NIfTI image loading, per-slice Z-score normalisation,
+six-class one-hot mask encoding, centre-padding, training-only
+intensity augmentation and train/validation/test DataLoaders.
+"""
 from pathlib import Path
 
 import nibabel as nib
@@ -137,7 +144,7 @@ class HipMRIDataset(Dataset):
         image_path = self.files[index]
         mask_path = self.mask_dir / image_path.name.replace("case_", "seg_", 1)
 
-        # Reuse the Appendix B loader for both MRI and mask.
+        # Appendix B loader for both MRI and mask.
         image = load_data_2D([image_path], normImage=True)[0]
         mask = load_data_2D([mask_path])[0].astype(np.int64)
         if image.shape != mask.shape:
@@ -153,7 +160,7 @@ class HipMRIDataset(Dataset):
         # Appendix B one-hot conversion, now with six fixed channels.
         onehot = to_channels(mask, dtype=np.float32)
 
-        # Only augment MRI intensity, not the mask's anatomical locations.
+        # Augment MRI intensity
         if self.augment:
             image = image * np.random.uniform(0.9, 1.1) + np.random.uniform(-0.1, 0.1)
 
